@@ -1,0 +1,31 @@
+import uuid
+from datetime import datetime, timezone
+from typing import Sequence, Union
+
+import sqlalchemy as sa
+
+from alembic import op
+
+# revision identifiers, used by Alembic.
+revision: str = '44d1a2f4a817'
+down_revision: Union[str, Sequence[str], None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    op.create_table(
+        'users',
+        sa.Column('id', sa.UUID(as_uuid=True), nullable=False, primary_key=True, default=uuid.uuid4),
+        sa.Column('login', sa.String(length=30), nullable=False, unique=True),
+        sa.Column('email', sa.String(length=255), nullable=False, unique=True),
+        sa.Column('password_hash', sa.String(length=255), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)),
+        sa.PrimaryKeyConstraint('id')
+    )
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    op.drop_table('users')

@@ -1,9 +1,12 @@
 from abc import ABC, abstractmethod
 
 from app.core.database import async_session_maker
+from app.modules.users.repositories import UserRepository
 
 
 class IUnitOfWork(ABC):
+
+    user = UserRepository
 
     @abstractmethod
     async def __aenter__(self):
@@ -29,6 +32,8 @@ class UnitOfWork(IUnitOfWork):
 
     async def __aenter__(self):
         self.session = self.session_maker()
+
+        self.user = UserRepository(self.session)
 
         return self
 
