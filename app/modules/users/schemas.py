@@ -8,15 +8,6 @@ class UserBase(BaseModel):
     login: str
 
 
-class UserCreate(UserBase):
-    email: EmailStr
-    password: str
-
-
-class UserLogin(UserBase):
-    password: str
-
-
 class UserUpdate(BaseModel):
     login: str | None = None
     email: EmailStr | None = None

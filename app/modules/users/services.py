@@ -2,28 +2,14 @@ from uuid import UUID
 
 from app.core.security import get_password_hash
 from app.core.unit_of_work import UnitOfWork
-from app.modules.users.exceptions import UserAlreadyExistsError, UserNotFoundError
-from app.modules.users.schemas import UserCreate, UserLogin, UserResponse, UserUpdate
+from app.modules.users.exceptions import UserNotFoundError
+from app.modules.users.schemas import UserResponse, UserUpdate
 
 
 class UserService:
 
     def __init__(self, uow: UnitOfWork):
         self.uow = uow
-
-    async def create_user(self, user_create: UserCreate) -> UserResponse:
-        user_dict: dict = user_create.model_dump()
-        user_dict["password_hash"] = get_password_hash(user_dict.pop("password"))
-        async with self.uow as uow:
-            existing_user = await uow.user.find_one(login=user_create.login)
-            if existing_user:
-                raise UserAlreadyExistsError(user_create.login)
-
-            user = await uow.user.add_one(user_dict)
-            user_to_return = UserResponse.model_validate(user)
-            await uow.commit()
-
-            return user_to_return
 
     async def get_user(self, user_id: UUID) -> UserResponse:
         async with self.uow as uow:

@@ -1,13 +1,9 @@
 from abc import ABC, abstractmethod
 
 from app.core.database import async_session_maker
-from app.modules.users.repositories import UserRepository
 
 
 class IUnitOfWork(ABC):
-
-    user = UserRepository
-
     @abstractmethod
     async def __aenter__(self):
         raise NotImplementedError
@@ -29,9 +25,12 @@ class UnitOfWork(IUnitOfWork):
 
     def __init__(self):
         self.session_maker = async_session_maker
+        self.user = None
 
     async def __aenter__(self):
         self.session = self.session_maker()
+
+        from app.modules.users.repositories import UserRepository
 
         self.user = UserRepository(self.session)
 
