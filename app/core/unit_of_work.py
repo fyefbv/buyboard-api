@@ -28,10 +28,12 @@ class UnitOfWork(IUnitOfWork):
         self.user = None
         self.category = None
         self.location = None
+        self.ad = None
 
     async def __aenter__(self):
         self.session = self.session_maker()
 
+        from app.modules.ads.repositories import AdRepository
         from app.modules.categories.repositories import CategoryRepository
         from app.modules.locations.repositories import LocationRepository
         from app.modules.users.repositories import UserRepository
@@ -39,6 +41,7 @@ class UnitOfWork(IUnitOfWork):
         self.user = UserRepository(self.session)
         self.category = CategoryRepository(self.session)
         self.location = LocationRepository(self.session)
+        self.ad = AdRepository(self.session)
 
         return self
 

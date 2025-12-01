@@ -7,4 +7,4 @@ class LocationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    name: str
+    name: str | None = None
