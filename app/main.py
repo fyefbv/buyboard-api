@@ -10,12 +10,14 @@ from app.modules import (
     setup_location_exception_handlers,
     setup_user_exception_handlers,
 )
+from app.shared import setup_shared_exception_handlers
 
 app = FastAPI(title="Buyboard API")
 
 app.include_router(api_router)
 
 setup_system_exception_handlers(app)
+setup_shared_exception_handlers(app)
 setup_user_exception_handlers(app)
 setup_auth_exception_handlers(app)
 setup_category_exception_handlers(app)

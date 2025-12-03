@@ -23,3 +23,39 @@ class AlreadyExistsError(HTTPException):
         )
         super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
         self.entity_field = entity_field
+
+
+class ObjectUploadError(HTTPException):
+    def __init__(self, object_name: str):
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload object {object_name}",
+        )
+
+
+class ObjectDeleteError(HTTPException):
+    def __init__(self, object_name: str):
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete object {object_name}",
+        )
+
+
+class ObjectListGetError(HTTPException):
+    def __init__(self, object_name: str):
+        super().__init__(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get the {object_name} object list",
+        )
+
+
+class UnsupportedMediaTypeError(HTTPException):
+    def __init__(self, detail: str):
+        super().__init__(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=detail
+        )
+
+
+class FileTooLargeError(HTTPException):
+    def __init__(self, detail: str):
+        super().__init__(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=detail)

@@ -8,11 +8,13 @@ from app.modules.categories.exceptions import CategoryNotFoundError
 from app.modules.categories.schemas import CategoryResponse
 from app.modules.locations.exceptions import LocationNotFoundError
 from app.modules.locations.schemas import LocationResponse
+from app.shared.object_storage import ObjectStorageService
 
 
 class AdService:
-    def __init__(self, uow: UnitOfWork):
+    def __init__(self, uow: UnitOfWork, object_storage: ObjectStorageService):
         self.uow = uow
+        self.object_storage = object_storage
 
     async def get_ads(
         self,
@@ -49,7 +51,7 @@ class AdService:
                     price=ad.price,
                     title=ad.title,
                     description=ad.description,
-                    images=[],
+                    images=await self.object_storage.get_ad_images(ad.id),
                     created_at=ad.created_at,
                     updated_at=ad.updated_at,
                 )
@@ -75,14 +77,16 @@ class AdService:
                 price=ad.price,
                 title=ad.title,
                 description=ad.description,
-                images=[],
+                images=await self.object_storage.get_ad_images(ad.id),
                 created_at=ad.created_at,
                 updated_at=ad.updated_at,
             )
 
             return ad_to_return
 
-    async def create_ad(self, user_id: UUID, ad_create: AdCreate) -> None:
+    async def create_ad(
+        self, user_id: UUID, images_data: list[bytes], ad_create: AdCreate
+    ) -> None:
         async with self.uow as uow:
             category = await uow.category.get_by_id(ad_create.category_id)
             if not category:
@@ -95,11 +99,18 @@ class AdService:
             ad_dict = ad_create.model_dump()
             ad_dict["user_id"] = user_id
 
-            await uow.ad.add_one(ad_dict)
+            ad = await uow.ad.add_one(ad_dict)
             await uow.commit()
 
+            await self.object_storage.upload_ad_images(ad.id, images_data)
+
     async def update_ad(
-        self, ad_id: UUID, user_id: UUID, ad_update: AdUpdate, accept_language: str
+        self,
+        ad_id: UUID,
+        user_id: UUID,
+        images_data: list[bytes] | None,
+        ad_update: AdUpdate,
+        accept_language: str,
     ) -> AdResponse:
         async with self.uow as uow:
             result = await uow.ad.find_one_with_details(ad_id, accept_language)
@@ -112,7 +123,7 @@ class AdService:
             if ad.user_id != user_id:
                 raise AdPermissionError(ad_id)
 
-            update_dict = ad_update.model_dump(exclude_unset=True)
+            update_dict = ad_update.model_dump(exclude_unset=True, exclude_none=True)
 
             if "category_id" in update_dict:
                 category = await uow.category.get_by_id(update_dict["category_id"])
@@ -128,6 +139,9 @@ class AdService:
 
             await uow.commit()
 
+            if images_data is not None:
+                await self.object_storage.upload_ad_images(ad.id, images_data)
+
             ad_to_return = AdResponse(
                 id=updated_ad.id,
                 user_id=updated_ad.user_id,
@@ -140,7 +154,7 @@ class AdService:
                 price=updated_ad.price,
                 title=updated_ad.title,
                 description=updated_ad.description,
-                images=[],
+                images=await self.object_storage.get_ad_images(ad_id),
                 created_at=updated_ad.created_at,
                 updated_at=updated_ad.updated_at,
             )
@@ -159,3 +173,5 @@ class AdService:
 
             await uow.ad.delete(ad_id)
             await uow.commit()
+
+            await self.object_storage.delete_ad_images(ad_id)

@@ -24,10 +24,8 @@ class AdRepository(Repository):
         stmt = (
             select(
                 Ad,
-                Category.name_translations[accept_language]
-                .label("category_name"),
-                Location.name_translations[accept_language]
-                .label("location_name"),
+                Category.name_translations[accept_language].label("category_name"),
+                Location.name_translations[accept_language].label("location_name"),
             )
             .join(Category, Ad.category_id == Category.id)
             .join(Location, Ad.location_id == Location.id)
@@ -67,10 +65,8 @@ class AdRepository(Repository):
         stmt = (
             select(
                 Ad,
-                Category.name_translations[accept_language]
-                .label("category_name"),
-                Location.name_translations[accept_language]
-                .label("location_name"),
+                Category.name_translations[accept_language].label("category_name"),
+                Location.name_translations[accept_language].label("location_name"),
             )
             .join(Category, Ad.category_id == Category.id)
             .join(Location, Ad.location_id == Location.id)

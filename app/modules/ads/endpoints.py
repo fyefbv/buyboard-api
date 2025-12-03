@@ -1,12 +1,12 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import JSONResponse
 
 from app.modules.ads.dependencies import get_ad_service
 from app.modules.ads.schemas import AdCreate, AdResponse, AdUpdate
 from app.modules.ads.services import AdService
-from app.shared.dependencies import get_accept_language, get_current_user
+from app.shared.dependencies import get_accept_language, get_current_user_id
 
 ads_router = APIRouter(prefix="/ads", tags=["Объявления"])
 
@@ -16,7 +16,7 @@ async def get_ad(
     ad_id: UUID,
     ad_service: AdService = Depends(get_ad_service),
     accept_language: str = Depends(get_accept_language),
-    _: UUID = Depends(get_current_user),
+    _: UUID = Depends(get_current_user_id),
 ) -> AdResponse:
     return await ad_service.get_ad(ad_id, accept_language)
 
@@ -33,7 +33,7 @@ async def get_ads(
     my_ads: bool = Query(False, description="Получить только мои объявления"),
     ad_service: AdService = Depends(get_ad_service),
     accept_language: str = Depends(get_accept_language),
-    user_id: UUID = Depends(get_current_user),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> list[AdResponse]:
     filters = {}
 
@@ -57,25 +57,35 @@ async def get_ads(
 
 @ads_router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_ad(
-    ad_create: AdCreate,
+    ad_create: AdCreate = Depends(AdCreate.as_form),
+    images: list[UploadFile] = File(description="Изображения объявления"),
     ad_service: AdService = Depends(get_ad_service),
-    user_id: UUID = Depends(get_current_user),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> JSONResponse:
-    await ad_service.create_ad(user_id, ad_create)
+    images_data = [await image.read() for image in images]
+
+    await ad_service.create_ad(user_id, images_data, ad_create)
     return {"detail": "Ad created successfully"}
 
 
 @ads_router.patch("/{ad_id}", response_model=AdResponse)
 async def update_ad(
     ad_id: UUID,
-    ad_update: AdUpdate,
+    ad_update: AdUpdate = Depends(AdUpdate.as_form),
+    images: list[UploadFile] = File(None, description="Изображения объявления"),
     ad_service: AdService = Depends(get_ad_service),
     accept_language: str = Depends(get_accept_language),
-    user_id: UUID = Depends(get_current_user),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> AdResponse:
+    if images is not None:
+        images_data = [await image.read() for image in images]
+    else:
+        images_data = images
+
     return await ad_service.update_ad(
         ad_id=ad_id,
         user_id=user_id,
+        images_data=images_data,
         ad_update=ad_update,
         accept_language=accept_language,
     )
@@ -85,7 +95,7 @@ async def update_ad(
 async def delete_ad(
     ad_id: UUID,
     ad_service: AdService = Depends(get_ad_service),
-    user_id: UUID = Depends(get_current_user),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> JSONResponse:
     await ad_service.delete_ad(ad_id, user_id)
     return {"detail": "Ad deleted successfully"}
