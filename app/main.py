@@ -7,6 +7,7 @@ from app.modules import (
     setup_ad_exception_handlers,
     setup_auth_exception_handlers,
     setup_category_exception_handlers,
+    setup_favorite_exception_handlers,
     setup_location_exception_handlers,
     setup_user_exception_handlers,
 )
@@ -23,6 +24,7 @@ setup_auth_exception_handlers(app)
 setup_category_exception_handlers(app)
 setup_location_exception_handlers(app)
 setup_ad_exception_handlers(app)
+setup_favorite_exception_handlers(app)
 
 if __name__ == "__main__":
     uvicorn.run(app="main:app", host="0.0.0.0", port=8000, reload=True)

@@ -18,9 +18,9 @@ class AdService:
 
     async def get_ads(
         self,
+        user_id: UUID,
         accept_language: str,
         filters: dict[str, Any] | None = None,
-        user_id: UUID | None = None,
     ) -> list[AdResponse]:
         if filters is None:
             filters = {}
@@ -30,17 +30,20 @@ class AdService:
         title = filters.get("title")
         category_id = filters.get("category_id")
         location_id = filters.get("location_id")
+        ad_ids = filters.get("ad_ids")
 
         async with self.uow as uow:
             rows = await uow.ad.find_all_with_details(
-                user_id=user_id,
                 min_price=min_price,
                 max_price=max_price,
                 title=title,
                 category_id=category_id,
                 location_id=location_id,
                 accept_language=accept_language,
+                ad_ids=ad_ids,
             )
+
+            favorite_ids = set(await uow.favorite.get_favorite_ads_ids(user_id))
 
             ads_to_return = [
                 AdResponse(
@@ -52,6 +55,7 @@ class AdService:
                     title=ad.title,
                     description=ad.description,
                     images=await self.object_storage.get_ad_images(ad.id),
+                    is_favorite=ad.id in favorite_ids,
                     created_at=ad.created_at,
                     updated_at=ad.updated_at,
                 )
@@ -60,7 +64,9 @@ class AdService:
 
             return ads_to_return
 
-    async def get_ad(self, ad_id: UUID, accept_language: str) -> AdResponse:
+    async def get_ad(
+        self, ad_id: UUID, user_id: UUID, accept_language: str
+    ) -> AdResponse:
         async with self.uow as uow:
             result = await uow.ad.find_one_with_details(ad_id, accept_language)
 
@@ -68,6 +74,11 @@ class AdService:
                 raise AdNotFoundError(ad_id)
 
             ad, category_name, location_name = result
+
+            if await uow.favorite.find_one(user_id=user_id, ad_id=ad_id):
+                is_favorite = True
+            else:
+                is_favorite = False
 
             ad_to_return = AdResponse(
                 id=ad.id,
@@ -78,6 +89,7 @@ class AdService:
                 title=ad.title,
                 description=ad.description,
                 images=await self.object_storage.get_ad_images(ad.id),
+                is_favorite=is_favorite,
                 created_at=ad.created_at,
                 updated_at=ad.updated_at,
             )
@@ -142,6 +154,11 @@ class AdService:
             if images_data is not None:
                 await self.object_storage.upload_ad_images(ad.id, images_data)
 
+            if await uow.favorite.find_one(user_id=user_id, ad_id=ad_id):
+                is_favorite = True
+            else:
+                is_favorite = False
+
             ad_to_return = AdResponse(
                 id=updated_ad.id,
                 user_id=updated_ad.user_id,
@@ -155,6 +172,7 @@ class AdService:
                 title=updated_ad.title,
                 description=updated_ad.description,
                 images=await self.object_storage.get_ad_images(ad_id),
+                is_favorite=is_favorite,
                 created_at=updated_ad.created_at,
                 updated_at=updated_ad.updated_at,
             )

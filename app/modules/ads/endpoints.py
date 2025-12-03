@@ -16,9 +16,9 @@ async def get_ad(
     ad_id: UUID,
     ad_service: AdService = Depends(get_ad_service),
     accept_language: str = Depends(get_accept_language),
-    _: UUID = Depends(get_current_user_id),
+    user_id: UUID = Depends(get_current_user_id),
 ) -> AdResponse:
-    return await ad_service.get_ad(ad_id, accept_language)
+    return await ad_service.get_ad(ad_id, user_id, accept_language)
 
 
 @ads_router.get("/", response_model=list[AdResponse])
@@ -30,7 +30,7 @@ async def get_ads(
     ),
     category_id: UUID | None = Query(None, description="ID категории"),
     location_id: UUID | None = Query(None, description="ID локации"),
-    my_ads: bool = Query(False, description="Получить только мои объявления"),
+    ad_ids: list[UUID] | None = Query(None, description="IDs объявлений"),
     ad_service: AdService = Depends(get_ad_service),
     accept_language: str = Depends(get_accept_language),
     user_id: UUID = Depends(get_current_user_id),
@@ -41,6 +41,8 @@ async def get_ads(
         filters["min_price"] = min_price
     if max_price is not None:
         filters["max_price"] = max_price
+    if ad_ids:
+        filters["ad_ids"] = ad_ids
     if title:
         filters["title"] = title
     if category_id:
@@ -48,10 +50,8 @@ async def get_ads(
     if location_id:
         filters["location_id"] = location_id
 
-    target_user_id = user_id if my_ads else None
-
     return await ad_service.get_ads(
-        filters=filters, user_id=target_user_id, accept_language=accept_language
+        filters=filters, user_id=user_id, accept_language=accept_language
     )
 
 

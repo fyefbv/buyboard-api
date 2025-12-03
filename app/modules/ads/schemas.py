@@ -70,5 +70,6 @@ class AdResponse(AdBase):
     price: int
     title: str
     images: list[str]
+    is_favorite: bool = False
     created_at: datetime
     updated_at: datetime

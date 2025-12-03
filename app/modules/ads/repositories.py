@@ -20,6 +20,7 @@ class AdRepository(Repository):
         title: str | None = None,
         category_id: UUID | None = None,
         location_id: UUID | None = None,
+        ad_ids: list[UUID] | None = None,
     ) -> list[tuple[Ad, str, str]]:
         stmt = (
             select(
@@ -50,6 +51,9 @@ class AdRepository(Repository):
 
         if location_id is not None:
             conditions.append(Ad.location_id == location_id)
+
+        if ad_ids is not None:
+            conditions.append(Ad.id.in_(ad_ids))
 
         if conditions:
             stmt = stmt.where(and_(*conditions))
