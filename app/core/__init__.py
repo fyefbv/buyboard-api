@@ -10,8 +10,6 @@ from app.core.system_exception_handlers import (
 
 
 def setup_system_exception_handlers(app: FastAPI):
-    """Настройка системных обработчиков исключений"""
-
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(SQLAlchemyError, sqlalchemy_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)

@@ -8,6 +8,7 @@ from app.modules.categories.exceptions import CategoryNotFoundError
 from app.modules.categories.schemas import CategoryResponse
 from app.modules.locations.exceptions import LocationNotFoundError
 from app.modules.locations.schemas import LocationResponse
+from app.shared.exceptions import FileTooLargeError, UnsupportedMediaTypeError
 from app.shared.object_storage import ObjectStorageService
 
 
@@ -15,6 +16,38 @@ class AdService:
     def __init__(self, uow: UnitOfWork, object_storage: ObjectStorageService):
         self.uow = uow
         self.object_storage = object_storage
+
+    async def get_ad(
+        self, ad_id: UUID, user_id: UUID, accept_language: str
+    ) -> AdResponse:
+        async with self.uow as uow:
+            result = await uow.ad.find_one_with_details(ad_id, accept_language)
+
+            if not result:
+                raise AdNotFoundError(ad_id)
+
+            ad, category_name, location_name = result
+
+            if await uow.favorite.find_one(user_id=user_id, ad_id=ad_id):
+                is_favorite = True
+            else:
+                is_favorite = False
+
+            ad_to_return = AdResponse(
+                id=ad.id,
+                user_id=ad.user_id,
+                category=CategoryResponse(id=ad.category_id, name=category_name),
+                location=LocationResponse(id=ad.location_id, name=location_name),
+                price=ad.price,
+                title=ad.title,
+                description=ad.description,
+                images=await self.object_storage.get_ad_images(ad.id),
+                is_favorite=is_favorite,
+                created_at=ad.created_at,
+                updated_at=ad.updated_at,
+            )
+
+            return ad_to_return
 
     async def get_ads(
         self,
@@ -64,21 +97,81 @@ class AdService:
 
             return ads_to_return
 
-    async def get_ad(
-        self, ad_id: UUID, user_id: UUID, accept_language: str
+    async def get_current_user_ads(
+        self,
+        user_id: UUID,
+        accept_language: str,
+    ) -> list[AdResponse]:
+        async with self.uow as uow:
+            rows = await uow.ad.find_all_with_details(
+                user_id=user_id,
+                accept_language=accept_language,
+            )
+
+            ads_to_return = [
+                AdResponse(
+                    id=ad.id,
+                    user_id=ad.user_id,
+                    category=CategoryResponse(id=ad.category_id, name=category_name),
+                    location=LocationResponse(id=ad.location_id, name=location_name),
+                    price=ad.price,
+                    title=ad.title,
+                    description=ad.description,
+                    images=await self.object_storage.get_ad_images(ad.id),
+                    created_at=ad.created_at,
+                    updated_at=ad.updated_at,
+                )
+                for ad, category_name, location_name in rows
+            ]
+
+            return ads_to_return
+
+    async def create_ad(
+        self,
+        user_id: UUID,
+        files_data: list[bytes],
+        ad_create: AdCreate,
+        accept_language: str,
+        files_content_type: list[str],
     ) -> AdResponse:
         async with self.uow as uow:
-            result = await uow.ad.find_one_with_details(ad_id, accept_language)
+            category = await uow.category.get_by_id(ad_create.category_id)
+            if not category:
+                raise CategoryNotFoundError(ad_create.category_id)
 
-            if not result:
-                raise AdNotFoundError(ad_id)
+            location = await uow.location.get_by_id(ad_create.location_id)
+            if not location:
+                raise LocationNotFoundError(ad_create.location_id)
+
+            for index, (file_data, content_type) in enumerate(
+                zip(files_data, files_content_type)
+            ):
+                if not content_type:
+                    raise UnsupportedMediaTypeError(
+                        f"File {index + 1}: content type is missing"
+                    )
+
+                if not content_type.startswith("image/"):
+                    raise UnsupportedMediaTypeError(
+                        f"File {index + 1} must be an image"
+                    )
+
+                if len(file_data) > 5 * 1024 * 1024:
+                    raise FileTooLargeError(
+                        f"File {index + 1} is too large. Maximum size: 5MB"
+                    )
+
+            ad_dict = ad_create.model_dump()
+            ad_dict["user_id"] = user_id
+
+            ad = await uow.ad.add_one(ad_dict)
+            await uow.commit()
+
+            await self.object_storage.upload_ad_images(ad.id, files_data)
+
+            result = await uow.ad.find_one_with_details(ad.id, accept_language)
 
             ad, category_name, location_name = result
-
-            if await uow.favorite.find_one(user_id=user_id, ad_id=ad_id):
-                is_favorite = True
-            else:
-                is_favorite = False
 
             ad_to_return = AdResponse(
                 id=ad.id,
@@ -89,51 +182,48 @@ class AdService:
                 title=ad.title,
                 description=ad.description,
                 images=await self.object_storage.get_ad_images(ad.id),
-                is_favorite=is_favorite,
                 created_at=ad.created_at,
                 updated_at=ad.updated_at,
             )
 
             return ad_to_return
 
-    async def create_ad(
-        self, user_id: UUID, images_data: list[bytes], ad_create: AdCreate
-    ) -> None:
-        async with self.uow as uow:
-            category = await uow.category.get_by_id(ad_create.category_id)
-            if not category:
-                raise CategoryNotFoundError(ad_create.category_id)
-
-            location = await uow.location.get_by_id(ad_create.location_id)
-            if not location:
-                raise LocationNotFoundError(ad_create.location_id)
-
-            ad_dict = ad_create.model_dump()
-            ad_dict["user_id"] = user_id
-
-            ad = await uow.ad.add_one(ad_dict)
-            await uow.commit()
-
-            await self.object_storage.upload_ad_images(ad.id, images_data)
-
     async def update_ad(
         self,
         ad_id: UUID,
         user_id: UUID,
-        images_data: list[bytes] | None,
+        files_data: list[bytes] | None,
         ad_update: AdUpdate,
         accept_language: str,
+        files_content_type: list[str] | None,
     ) -> AdResponse:
         async with self.uow as uow:
-            result = await uow.ad.find_one_with_details(ad_id, accept_language)
+            ad = await uow.ad.get_by_id(ad_id)
 
-            if not result:
+            if not ad:
                 raise AdNotFoundError(ad_id)
-
-            ad, category_name, location_name = result
 
             if ad.user_id != user_id:
                 raise AdPermissionError(ad_id)
+
+            if files_data is not None and files_content_type is not None:
+                for index, (file_data, content_type) in enumerate(
+                    zip(files_data, files_content_type)
+                ):
+                    if not content_type:
+                        raise UnsupportedMediaTypeError(
+                            f"File {index + 1}: content type is missing"
+                        )
+
+                    if not content_type.startswith("image/"):
+                        raise UnsupportedMediaTypeError(
+                            f"File {index + 1} must be an image"
+                        )
+
+                    if len(file_data) > 5 * 1024 * 1024:
+                        raise FileTooLargeError(
+                            f"File {index + 1} is too large. Maximum size: 5MB"
+                        )
 
             update_dict = ad_update.model_dump(exclude_unset=True, exclude_none=True)
 
@@ -151,13 +241,13 @@ class AdService:
 
             await uow.commit()
 
-            if images_data is not None:
-                await self.object_storage.upload_ad_images(ad.id, images_data)
+            if files_data is not None:
+                await self.object_storage.delete_ad_images(updated_ad.id)
+                await self.object_storage.upload_ad_images(updated_ad.id, files_data)
 
-            if await uow.favorite.find_one(user_id=user_id, ad_id=ad_id):
-                is_favorite = True
-            else:
-                is_favorite = False
+            result = await uow.ad.find_one_with_details(updated_ad.id, accept_language)
+
+            _, category_name, location_name = result
 
             ad_to_return = AdResponse(
                 id=updated_ad.id,
@@ -172,7 +262,6 @@ class AdService:
                 title=updated_ad.title,
                 description=updated_ad.description,
                 images=await self.object_storage.get_ad_images(ad_id),
-                is_favorite=is_favorite,
                 created_at=updated_ad.created_at,
                 updated_at=updated_ad.updated_at,
             )

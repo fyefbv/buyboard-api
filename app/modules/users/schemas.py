@@ -25,3 +25,9 @@ class UserAvatarResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     avatar_url: str | None = None
+
+
+class UserStatsResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    active_ads_count: int

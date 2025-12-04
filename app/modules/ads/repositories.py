@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import String, and_, select
+from sqlalchemy import String, and_, func, select
 
 from app.modules.ads.models import Ad
 from app.modules.categories.models import Category
@@ -79,3 +79,9 @@ class AdRepository(Repository):
 
         result = await self.session.execute(stmt)
         return result.first()
+
+    async def count_user_ads(self, user_id: UUID) -> int:
+        stmt = select(func.count()).select_from(Ad).where(Ad.user_id == user_id)
+        result = await self.session.execute(stmt)
+        count = result.scalar_one()
+        return count

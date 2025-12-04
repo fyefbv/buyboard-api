@@ -4,7 +4,12 @@ from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import JSONResponse
 
 from app.modules.users.dependencies import get_user_service
-from app.modules.users.schemas import UserAvatarResponse, UserResponse, UserUpdate
+from app.modules.users.schemas import (
+    UserAvatarResponse,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdate,
+)
 from app.modules.users.services import UserService
 from app.shared.dependencies import get_current_user_id
 
@@ -26,6 +31,31 @@ async def get_current_user(
     user_id: UUID = Depends(get_current_user_id),
 ) -> UserResponse:
     return await user_service.get_user(user_id)
+
+
+@users_router.get("/", response_model=list[UserResponse])
+async def get_users(
+    user_service: UserService = Depends(get_user_service),
+    _: UUID = Depends(get_current_user_id),
+) -> list[UserResponse]:
+    return await user_service.get_users()
+
+
+@users_router.get("/me/stats", response_model=UserStatsResponse)
+async def get_current_user_stats(
+    user_service: UserService = Depends(get_user_service),
+    user_id: UUID = Depends(get_current_user_id),
+) -> UserStatsResponse:
+    return await user_service.get_user_stats(user_id)
+
+
+@users_router.get("/{user_id}/stats", response_model=UserStatsResponse)
+async def get_user_stats_by_id(
+    user_id: UUID,
+    user_service: UserService = Depends(get_user_service),
+    _: UUID = Depends(get_current_user_id),
+) -> UserStatsResponse:
+    return await user_service.get_user_stats(user_id)
 
 
 @users_router.patch("/me", response_model=UserResponse)

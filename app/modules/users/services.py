@@ -3,7 +3,12 @@ from uuid import UUID
 from app.core.security import get_password_hash
 from app.core.unit_of_work import UnitOfWork
 from app.modules.users.exceptions import UserNotFoundError
-from app.modules.users.schemas import UserAvatarResponse, UserResponse, UserUpdate
+from app.modules.users.schemas import (
+    UserAvatarResponse,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdate,
+)
 from app.shared.exceptions import FileTooLargeError, UnsupportedMediaTypeError
 from app.shared.object_storage import ObjectStorageService
 
@@ -27,6 +32,31 @@ class UserService:
 
             return user_to_return
 
+    async def get_users(self) -> list[UserResponse]:
+        async with self.uow as uow:
+            users = await uow.user.find_all()
+            user_ids = [user.id for user in users]
+            avatar_urls = await self.object_storage_service.get_avatar_urls(user_ids)
+
+            users_to_return = []
+            for user in users:
+                user_to_return = UserResponse.model_validate(user)
+                user_to_return.avatar_url = avatar_urls.get(user.id)
+
+                users_to_return.append(user_to_return)
+
+            return users_to_return
+
+    async def get_user_stats(self, user_id: UUID) -> UserStatsResponse:
+        async with self.uow as uow:
+            user = await uow.user.get_by_id(user_id)
+            if not user:
+                raise UserNotFoundError(user_id)
+
+            active_ads_count = await uow.ad.count_user_ads(user_id)
+
+            return UserStatsResponse(active_ads_count=active_ads_count)
+
     async def update_user(self, user_id: UUID, user_update: UserUpdate) -> UserResponse:
         user_dict = user_update.model_dump(exclude_unset=True, exclude_none=True)
         if "password" in user_dict:
@@ -47,8 +77,8 @@ class UserService:
 
     async def delete_user(self, user_id: UUID) -> None:
         async with self.uow as uow:
-            is_deleted = await uow.user.delete(user_id)
-            if not is_deleted:
+            deleted = await uow.user.delete(user_id)
+            if not deleted:
                 raise UserNotFoundError(user_id)
 
             existing_avatar = await self.object_storage_service.avatar_exists(user_id)

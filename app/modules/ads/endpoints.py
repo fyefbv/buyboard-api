@@ -55,39 +55,57 @@ async def get_ads(
     )
 
 
-@ads_router.post("/", status_code=status.HTTP_201_CREATED)
+@ads_router.get("/me/", response_model=list[AdResponse])
+async def get_current_user_ads(
+    ad_service: AdService = Depends(get_ad_service),
+    accept_language: str = Depends(get_accept_language),
+    user_id: UUID = Depends(get_current_user_id),
+) -> list[AdResponse]:
+    return await ad_service.get_current_user_ads(user_id, accept_language)
+
+
+@ads_router.post("/", response_model=AdResponse, status_code=status.HTTP_201_CREATED)
 async def create_ad(
     ad_create: AdCreate = Depends(AdCreate.as_form),
-    images: list[UploadFile] = File(description="Изображения объявления"),
+    files: list[UploadFile] = File(description="Изображения объявления"),
     ad_service: AdService = Depends(get_ad_service),
+    accept_language: str = Depends(get_accept_language),
     user_id: UUID = Depends(get_current_user_id),
-) -> JSONResponse:
-    images_data = [await image.read() for image in images]
+) -> AdResponse:
+    files_data = [await file.read() for file in files]
 
-    await ad_service.create_ad(user_id, images_data, ad_create)
-    return {"detail": "Ad created successfully"}
+    return await ad_service.create_ad(
+        user_id=user_id,
+        files_data=files_data,
+        ad_create=ad_create,
+        accept_language=accept_language,
+        files_content_type=[file.content_type for file in files],
+    )
 
 
 @ads_router.patch("/{ad_id}", response_model=AdResponse)
 async def update_ad(
     ad_id: UUID,
     ad_update: AdUpdate = Depends(AdUpdate.as_form),
-    images: list[UploadFile] = File(None, description="Изображения объявления"),
+    files: list[UploadFile] = File(None, description="Изображения объявления"),
     ad_service: AdService = Depends(get_ad_service),
     accept_language: str = Depends(get_accept_language),
     user_id: UUID = Depends(get_current_user_id),
 ) -> AdResponse:
-    if images is not None:
-        images_data = [await image.read() for image in images]
+    if files is not None:
+        files_data = [await file.read() for file in files]
+        files_content_type = [file.content_type for file in files]
     else:
-        images_data = images
+        files_data = None
+        files_content_type = None
 
     return await ad_service.update_ad(
         ad_id=ad_id,
         user_id=user_id,
-        images_data=images_data,
+        files_data=files_data,
         ad_update=ad_update,
         accept_language=accept_language,
+        files_content_type=files_content_type,
     )
 
 

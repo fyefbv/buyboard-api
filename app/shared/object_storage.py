@@ -64,6 +64,26 @@ class ObjectStorageService:
         except ClientError as e:
             return None
 
+    async def get_avatar_urls(self, user_ids: list[UUID]) -> dict[UUID, str | None]:
+        try:
+            keys = [f"{self.AVATAR_KEY_PREFIX}{user_id}.jpg" for user_id in user_ids]
+            response = self.s3.list_objects_v2(
+                Bucket=self.bucket_name, Prefix=self.AVATAR_KEY_PREFIX
+            )
+
+            existing_keys = {obj["Key"] for obj in response.get("Contents", [])}
+            result = {}
+
+            for user_id, key in zip(user_ids, keys):
+                if key in existing_keys:
+                    result[user_id] = self._generate_presigned_url(key)
+                else:
+                    result[user_id] = None
+
+            return result
+        except ClientError as e:
+            raise ObjectListGetError("avatar")
+
     async def avatar_exists(self, user_id: UUID) -> bool:
         try:
             key = f"{self.AVATAR_KEY_PREFIX}{user_id}.jpg"

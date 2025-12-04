@@ -17,9 +17,13 @@ class AuthService:
         user_dict: dict = user_register.model_dump()
         user_dict["password_hash"] = get_password_hash(user_dict.pop("password"))
         async with self.uow as uow:
-            existing_user = await uow.user.find_one(login=user_register.login)
-            if existing_user:
+            existing_by_login = await uow.user.find_one(login=user_register.login)
+            if existing_by_login:
                 raise UserAlreadyExistsError(user_register.login)
+
+            existing_by_email = await uow.user.find_one(email=user_register.email)
+            if existing_by_email:
+                raise UserAlreadyExistsError(user_register.email)
 
             user = await uow.user.add_one(user_dict)
 

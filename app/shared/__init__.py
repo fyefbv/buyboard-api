@@ -17,8 +17,6 @@ from app.shared.exceptions import (
 
 
 def setup_shared_exception_handlers(app: FastAPI):
-    """Настройка общих обработчиков исключений"""
-
     app.add_exception_handler(ObjectUploadError, object_upload_handler)
     app.add_exception_handler(ObjectDeleteError, object_delete_handler)
     app.add_exception_handler(ObjectListGetError, object_list_get_handler)
