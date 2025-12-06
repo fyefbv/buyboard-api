@@ -77,14 +77,20 @@ class UserService:
 
     async def delete_user(self, user_id: UUID) -> None:
         async with self.uow as uow:
-            deleted = await uow.user.delete(user_id)
-            if not deleted:
+            user = await uow.user.get_by_id(user_id)
+            if not user:
                 raise UserNotFoundError(user_id)
 
             existing_avatar = await self.object_storage_service.avatar_exists(user_id)
 
             if existing_avatar:
                 await self.object_storage_service.delete_avatar(user_id)
+
+            user_ads = await uow.ad.find_all(user_id=user_id)
+            for ad in user_ads:
+                await self.object_storage_service.delete_ad_images(ad.id)
+
+            await uow.user.delete(user_id)
 
             await uow.commit()
 
